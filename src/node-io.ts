@@ -91,7 +91,35 @@ export function nodeAccountsIo(): AccountsIo {
   };
 }
 
-export function nodeLoginIo(): LoginIo {
+/** What the link adapters take from `fs`, replaceable in tests. */
+export interface LinkFs {
+  symlink: (
+    target: string,
+    path: string,
+    type?: "dir" | "file" | "junction" | null,
+  ) => Promise<void>;
+}
+
+/**
+ * A symlink as macOS and Linux make it; on Windows a junction for a
+ * directory (no privilege needed, absolute target) and a file symlink for a
+ * file (needs Developer Mode or the privilege).
+ */
+async function linkLike(
+  fs: LinkFs,
+  platform: NodeJS.Platform,
+  target: string,
+  path: string,
+): Promise<void> {
+  if (platform !== "win32") return fs.symlink(target, path);
+  const directory = (await stat(target)).isDirectory();
+  await fs.symlink(target, path, directory ? "junction" : "file");
+}
+
+export function nodeLoginIo(
+  platform: NodeJS.Platform = process.platform,
+  fs: LinkFs = { symlink },
+): LoginIo {
   return {
     spawn({ command, env }) {
       // No shell: the command is one executable (a name PATH resolves, or a
@@ -152,17 +180,37 @@ export function nodeLoginIo(): LoginIo {
         return false;
       }
       try {
-        await symlink(target, path);
+        await linkLike(fs, platform, target, path);
         return true;
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "EEXIST") return false;
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code === "EEXIST") return false;
+        // A file on Windows without the symlink privilege: one file for both
+        // accounts all the same, until something replaces it by renaming.
+        if (
+          code === "EPERM" &&
+          platform === "win32" &&
+          (await stat(target)).isFile()
+        ) {
+          try {
+            await link(target, path);
+            return "hardlink";
+          } catch (fallback) {
+            if ((fallback as NodeJS.ErrnoException).code === "EEXIST")
+              return false;
+            throw fallback;
+          }
+        }
         throw error;
       }
     },
   };
 }
 
-export function nodeSessionsIo(): SessionsIo {
+export function nodeSessionsIo(
+  platform: NodeJS.Platform = process.platform,
+  fs: LinkFs = { symlink },
+): SessionsIo {
   return {
     exists: async (path) => {
       try {
@@ -200,7 +248,7 @@ export function nodeSessionsIo(): SessionsIo {
     },
     // Neither goes over a file that is there (EEXIST instead).
     link: (existing, path) => link(existing, path),
-    symlink: (target, path) => symlink(target, path),
+    symlink: (target, path) => linkLike(fs, platform, target, path),
   };
 }
 

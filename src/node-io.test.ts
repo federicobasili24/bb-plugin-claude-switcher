@@ -1,7 +1,10 @@
 import {
   chmod,
+  lstat,
   mkdir,
   mkdtemp,
+  readFile,
+  readdir,
   readlink,
   rm,
   stat,
@@ -130,6 +133,99 @@ describe("loginHelperPath", () => {
     expect(loginHelperPath("file:///plugins/my%20dist/dist/server.js")).toBe(
       "/plugins/my dist/bin/open-login.sh",
     );
+  });
+});
+
+describe.runIf(process.platform === "win32")("links on Windows", () => {
+  /** A directory on the repo's drive, which may not be the temp dir's. */
+  let other = "";
+  afterEach(async () => {
+    if (other !== "") await rm(other, { recursive: true, force: true });
+    other = "";
+  });
+
+  it("links a directory as a junction, also from another drive, once", async () => {
+    const io = nodeLoginIo("win32");
+    base = await mkdtemp(join(tmpdir(), "claude-accounts-"));
+    other = await mkdtemp(join(process.cwd(), ".link-test-"));
+    const target = join(other, "projects");
+    await mkdir(target);
+    await writeFile(join(target, "a.jsonl"), "x");
+    const path = join(base, "projects");
+    expect(await io.link(target, path)).toBe(true);
+    expect((await lstat(path)).isSymbolicLink()).toBe(true);
+    expect(await readdir(path)).toEqual(["a.jsonl"]);
+    expect(await io.link(target, path)).toBe(false);
+    expect(await readFile(join(target, "a.jsonl"), "utf8")).toBe("x");
+  });
+
+  it("links a file with a symlink when Windows allows it", async () => {
+    const io = nodeLoginIo("win32");
+    base = await mkdtemp(join(tmpdir(), "claude-accounts-"));
+    const target = join(base, "settings.json");
+    await writeFile(target, "{}");
+    const path = join(base, "linked.json");
+    const linked = await io.link(target, path);
+    expect([true, "hardlink"]).toContain(linked);
+    expect(await readFile(path, "utf8")).toBe("{}");
+  });
+
+  it("falls back to a hard link for a file when symlinks need a privilege", async () => {
+    const refused = Object.assign(new Error("EPERM: operation not permitted"), {
+      code: "EPERM",
+    });
+    const io = nodeLoginIo("win32", {
+      symlink: async (target, path, type) => {
+        if (type === "file") throw refused;
+        await symlink(target, path, type);
+      },
+    });
+    base = await mkdtemp(join(tmpdir(), "claude-accounts-"));
+    const target = join(base, "settings.json");
+    await writeFile(target, "{}");
+    const path = join(base, "linked.json");
+    expect(await io.link(target, path)).toBe("hardlink");
+    expect((await stat(path)).ino).toBe((await stat(target)).ino);
+    expect(await io.link(target, path)).toBe(false);
+  });
+
+  it("asks for a junction for a directory and a file symlink for a file: no privilege for the first", async () => {
+    const asked: [string, string | null | undefined][] = [];
+    const record = async (target: string, path: string, type?: string | null) => {
+      asked.push([path, type]);
+      await symlink(target, path, type as "junction" | "file");
+    };
+    base = await mkdtemp(join(tmpdir(), "claude-accounts-"));
+    await mkdir(join(base, "dir"));
+    await writeFile(join(base, "file"), "x");
+    const login = nodeLoginIo("win32", { symlink: record });
+    await login.link(join(base, "dir"), join(base, "l-dir"));
+    await login.link(join(base, "file"), join(base, "l-file"));
+    const sessions = nodeSessionsIo("win32", { symlink: record });
+    await sessions.symlink(join(base, "dir"), join(base, "s-dir"));
+    await sessions.symlink(join(base, "file"), join(base, "s-file"));
+    expect(asked).toEqual([
+      [join(base, "l-dir"), "junction"],
+      [join(base, "l-file"), "file"],
+      [join(base, "s-dir"), "junction"],
+      [join(base, "s-file"), "file"],
+    ]);
+  });
+
+  it("links a session folder as a junction and never over what is there", async () => {
+    const io = nodeSessionsIo("win32");
+    base = await mkdtemp(join(tmpdir(), "claude-sessions-"));
+    const from = join(base, "a", "s");
+    await io.mkdir(join(from, "subagents"));
+    await io.mkdir(join(base, "b"));
+    await io.symlink(from, join(base, "b", "s"));
+    expect(await readdir(join(base, "b", "s"))).toEqual(["subagents"]);
+    await expect(io.symlink(from, join(base, "b", "s"))).rejects.toThrow(
+      /EEXIST/,
+    );
+    expect(await io.entries(join(base, "b"))).toEqual([
+      { name: "s", directory: true },
+    ]);
   });
 });
 

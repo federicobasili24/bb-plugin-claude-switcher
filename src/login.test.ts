@@ -351,6 +351,31 @@ describe("LoginFlow", () => {
     expect(spawned).toHaveLength(1);
   });
 
+  it("says which shared file got a hard link instead of a symlink", async () => {
+    const { io } = fakeIo([
+      "/home/.claude/projects",
+      "/home/.claude/settings.json",
+    ]);
+    const link = io.link;
+    io.link = async (target, path) =>
+      target.endsWith("settings.json") ? "hardlink" : link(target, path);
+    const shared: string[][] = [];
+    const { f } = flow(io, {
+      onShared: (_name, linked) => shared.push(linked),
+    });
+    await f.start({
+      name: "team",
+      configDir: "/accounts/team",
+      shareFrom: "/home/.claude",
+    });
+    expect(shared).toEqual([
+      [
+        "projects",
+        "settings.json (hard link: Claude Code may unlink it when it rewrites the file)",
+      ],
+    ]);
+  });
+
   it("reports a command the system refuses to run, and lets the next login start", async () => {
     const { io, spawned } = fakeIo();
     const spawn = io.spawn;

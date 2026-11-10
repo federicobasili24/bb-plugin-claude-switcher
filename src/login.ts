@@ -36,8 +36,12 @@ export interface LoginIo {
    * to one is not); empty when `dir` does not exist.
    */
   entries(dir: string): Promise<{ name: string; directory: boolean }[]>;
-  /** Symlinks `path` to `target` when `target` exists and `path` does not; true when it did. */
-  link(target: string, path: string): Promise<boolean>;
+  /**
+   * Symlinks `path` to `target` when `target` exists and `path` does not;
+   * true when it did. "hardlink": a file on Windows without the symlink
+   * privilege, hard-linked instead.
+   */
+  link(target: string, path: string): Promise<boolean | "hardlink">;
 }
 
 /**
@@ -293,10 +297,15 @@ export class LoginFlow {
     const failed: string[] = [];
     for (const entry of SHARED) {
       try {
-        if (
-          await this.io.link(`${shareFrom}/${entry}`, `${configDir}/${entry}`)
-        )
-          linked.push(entry);
+        const done = await this.io.link(
+          `${shareFrom}/${entry}`,
+          `${configDir}/${entry}`,
+        );
+        if (done === "hardlink")
+          linked.push(
+            `${entry} (hard link: Claude Code may unlink it when it rewrites the file)`,
+          );
+        else if (done) linked.push(entry);
       } catch (error) {
         failed.push(
           `${entry}: ${error instanceof Error ? error.message : String(error)}`,
