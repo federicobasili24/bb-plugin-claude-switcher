@@ -38,6 +38,8 @@ import {
   type EsperaTeam,
   type HeldRow,
 } from "./src/atascos.js";
+import { existsSync } from "node:fs";
+import { resolveClaudeCommand } from "./src/claude-command.js";
 import { joinPath, plainPath, trimTrailingSeparators } from "./src/platform.js";
 import {
   discoverAccounts,
@@ -2470,7 +2472,13 @@ export async function createPlugin(bb: BbPluginApi, deps: PluginDeps) {
       : status;
   }
   const login = new LoginFlow(deps.loginIo, {
-    command: () => current.claudeCommand.trim() || "claude",
+    command: () =>
+      resolveClaudeCommand(
+        current.claudeCommand,
+        deps.env,
+        deps.accountsIo.platform ?? "linux",
+        existsSync,
+      ),
     helper: deps.loginHelper,
     timeoutMs: LOGIN_TIMEOUT_MS,
     now: deps.now,
