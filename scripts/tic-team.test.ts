@@ -145,7 +145,8 @@ describe("elegir", () => {
 const SCRIPT = fileURLToPath(new URL("./tic-team.mjs", import.meta.url));
 
 describe("cerrar", () => {
-  it("tres pasadas que miran a la vez un cerrojo muerto: alguna se lo queda, nunca ninguna (que se lo queden dos es el techo escrito en cerrar)", async () => {
+  // Unlinking a lock another pass holds open: POSIX semantics (EPERM on Windows).
+  it.skipIf(process.platform === "win32")("tres pasadas que miran a la vez un cerrojo muerto: alguna se lo queda, nunca ninguna (que se lo queden dos es el techo escrito en cerrar)", async () => {
     for (let vuelta = 0; vuelta < 100; vuelta++) {
       const dir = await mkdtemp(join(tmpdir(), "tic-team-cerrojo-"));
       const ruta = join(dir, "tic-team.lock");
@@ -159,7 +160,8 @@ describe("cerrar", () => {
   });
 });
 
-describe("tic-team.mjs ejecutado", () => {
+// Its fake bb and claude are /bin/sh scripts: POSIX only (tic-team runs on a Linux bb server).
+describe.skipIf(process.platform === "win32")("tic-team.mjs ejecutado", () => {
   /**
    * `claude`: cuerpo de un claude de mentira. Cada llamada deja en llamadas.txt
    * un bloque: carpeta, variables que no deben llegar, carpeta de trabajo y un argumento por línea.

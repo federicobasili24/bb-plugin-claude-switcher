@@ -408,7 +408,8 @@ describe("familia", () => {
   });
 });
 
-describe("el script entero, con un bb de mentira", () => {
+// Its fake bb is a /bin/sh script: POSIX only (the canary runs on a Linux bb server).
+describe.skipIf(process.platform === "win32")("el script entero, con un bb de mentira", () => {
   const SCRIPT = fileURLToPath(new URL("./canario-cola.mjs", import.meta.url));
   const correr = async (fake: string, estado?: unknown, fallo?: unknown, env: Record<string, string> = {}) => {
     const dir = await mkdtemp(join(tmpdir(), "canario-"));

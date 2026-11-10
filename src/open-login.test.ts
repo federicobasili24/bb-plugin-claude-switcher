@@ -51,7 +51,8 @@ async function linux(): Promise<{ env: Record<string, string>; log: string }> {
   return { env: { PATH: `${base}:/usr/bin:/bin`, BROWSER: HELPER }, log };
 }
 
-describe("bin/open-login.sh", () => {
+// Runs the /bin/sh helper: macOS and Linux (Windows: open-login-cmd.test.ts).
+describe.skipIf(process.platform === "win32")("bin/open-login.sh", () => {
   it("opens nothing but an https address", async () => {
     const { env, log } = await linux();
     for (const args of [

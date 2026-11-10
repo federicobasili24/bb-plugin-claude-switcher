@@ -50,7 +50,8 @@ describe("nodeLoginIo", () => {
     return path;
   }
 
-  it("creates the directory for its owner only, and says whether it was new", async () => {
+  // POSIX file modes: Windows has ACLs, and mode bits read back as 0o666/0o777.
+  it.skipIf(process.platform === "win32")("creates the directory for its owner only, and says whether it was new", async () => {
     const io = nodeLoginIo();
     base = await mkdtemp(join(tmpdir(), "claude-accounts-"));
     const dir = join(base, "accounts", "team");
@@ -87,7 +88,8 @@ describe("nodeLoginIo", () => {
     ]);
   });
 
-  it("runs the command with `auth login`, passes its output on and writes to it", async () => {
+  // The fake claude is a /bin/sh script (Windows: the node.exe test below).
+  it.skipIf(process.platform === "win32")("runs the command with `auth login`, passes its output on and writes to it", async () => {
     const io = nodeLoginIo();
     base = await mkdtemp(join(tmpdir(), "claude-accounts-"));
     const path = await command('echo "args: $* dir: $CLAUDE_CONFIG_DIR"\nread line\necho "got $line" >&2');
@@ -101,7 +103,37 @@ describe("nodeLoginIo", () => {
     expect(output).toBe("args: auth login dir: /d/team\ngot the-code\n");
   });
 
-  it("reports a command that cannot run, and survives writing to a login that is gone", async () => {
+  it.runIf(process.platform === "win32")("on Windows, runs a real .exe with `auth login` and its environment, and reports one that is missing", async () => {
+    const io = nodeLoginIo();
+    base = await mkdtemp(join(tmpdir(), "claude-accounts-"));
+    // node.exe stands in for claude.exe: `-e` prints, and `auth login` follow.
+    const script = join(base, "print.js");
+    await writeFile(
+      script,
+      // node takes `auth` for its script (made absolute), then fails on it.
+      "console.log(process.argv.slice(1).map((a) => require('path').basename(a)).join(' ') + ' dir: ' + process.env.CLAUDE_CONFIG_DIR)",
+    );
+    const fake = join(base, "fake-claude.cmd");
+    // A .cmd would need a shell, which nodeLoginIo never uses: Node refuses
+    // it at once, and LoginFlow reports "could not run" (hence claude.exe).
+    await writeFile(fake, "@echo off\r\n");
+    expect(() => io.spawn({ command: fake, env: {} })).toThrow(/EINVAL/);
+    const missing = io.spawn({ command: join(base, "no-such.exe"), env: {} });
+    expect((await missing.exited).error).toMatch(/ENOENT/);
+    const real = io.spawn({
+      command: process.execPath,
+      env: { CLAUDE_CONFIG_DIR: "C:\\d\\team", NODE_OPTIONS: `--require=${script}` },
+    });
+    let output = "";
+    real.onOutput((chunk) => {
+      output += chunk;
+    });
+    await real.exited;
+    expect(output).toContain("auth login dir: C:\\d\\team");
+  });
+
+  // The fake claude is a /bin/sh script (Windows: the test above).
+  it.skipIf(process.platform === "win32")("reports a command that cannot run, and survives writing to a login that is gone", async () => {
     const io = nodeLoginIo();
     base = await mkdtemp(join(tmpdir(), "claude-accounts-"));
     const missing = io.spawn({ command: join(base, "no-such-command"), env: {} });

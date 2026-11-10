@@ -229,6 +229,19 @@ bb plugin install .  # bb builds the plugin at install time
 - **More than one Claude Code login**, each in its own config directory,
   set up as described in [Setting up extra accounts](#setting-up-extra-accounts).
 
+### On Windows
+
+The plugin runs on a Windows bb server too (branch `windows` of this fork).
+`accountsDir` takes `C:\…`, `C:/…` or `~\…`; logins and usage work as on
+Linux (the login lives in each account's `.credentials.json`). Shared
+directories become junctions (no privilege needed); shared files become
+symlinks with Windows Developer Mode on, hard links without it (the log
+says which). Leave **Claude Code executable** at `claude`: the plugin finds
+`claude.exe`, also behind npm's `claude.cmd`. Install from a clone with
+`bb plugin install <clone path>`. Clone it with `core.autocrlf` off: the
+tests read sources byte for byte. The automation scripts in `scripts/`
+(canary, Team tick) are not ported.
+
 ## Setting up extra accounts
 
 The default account is `~/.claude`, the CLI's own directory (its login
