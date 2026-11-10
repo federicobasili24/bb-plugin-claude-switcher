@@ -43,4 +43,9 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run check
+      # As `npm run check`, with a longer per-test timeout: one upstream
+      # server test runs past vitest's 5 s on windows-latest about every
+      # other run (it passes locally on Windows well under that).
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npx vitest run --testTimeout=20000
