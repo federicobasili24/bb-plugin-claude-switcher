@@ -240,7 +240,10 @@ says which). Leave **Claude Code executable** at `claude`: the plugin finds
 `claude.exe`, also behind npm's `claude.cmd`. Install from a clone with
 `bb plugin install <clone path>`. Clone it with `core.autocrlf` off: the
 tests read sources byte for byte. The automation scripts in `scripts/`
-(canary, Team tick) are not ported.
+(canary, Team tick) are not ported. The committed `dist/` on that branch is
+upstream's: bb rebuilds it at install time, and CI skips the `dist/` check
+there until it is rebuilt on Linux (`env -u BB_CLI npx -y --package
+bb-app@0.45.0 bb plugin build`).
 
 ## Setting up extra accounts
 

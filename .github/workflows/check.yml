@@ -25,8 +25,10 @@ jobs:
       - run: npm install -g bb-app@0.45.0
       - run: bb plugin types --check
       - run: npm run build
-      # Say which file differs, and how, before failing.
-      - run: git diff --stat -- dist && git diff -U0 -- dist/server.meta.json dist/app.meta.json && test -z "$(git status --porcelain -- dist)"
+      # Say which file differs, and how, before failing. Not on the fork's
+      # `windows` branch: its dist/ stays upstream's until a Linux rebuild.
+      - if: github.ref != 'refs/heads/windows'
+        run: git diff --stat -- dist && git diff -U0 -- dist/server.meta.json dist/app.meta.json && test -z "$(git status --porcelain -- dist)"
 
   # The plugin on a Windows bb server. dist/ is built on Linux only: bb-app
   # does not install on Windows.
