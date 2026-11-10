@@ -9,6 +9,7 @@ import {
   readdir,
   realpath,
   rename,
+  rm,
   stat,
   symlink,
   writeFile,
@@ -65,10 +66,48 @@ export function nodeCredentialIo(): CredentialIo {
     writeFile: async (path, content) => {
       const tmp = `${path}.tmp-${process.pid}`;
       await writeFile(tmp, content, { mode: 0o600 });
-      await rename(tmp, path);
+      await renameWithRetry(tmp, path, {
+        platform: platform(),
+        attempts: 5,
+        delayMs: 100,
+      });
     },
     fetch: (input, init) => fetch(input, init),
   };
+}
+
+/** Errors Windows gives while another process (Claude Code) has the file open. */
+const BUSY = new Set(["EPERM", "EBUSY", "EACCES"]);
+
+/**
+ * `rename`, tried again on Windows while the destination is busy. On the
+ * last failure the temp file is removed there, so no `.tmp-*` stays behind.
+ * On macOS and Linux: one attempt, as before.
+ */
+export async function renameWithRetry(
+  from: string,
+  to: string,
+  opts: {
+    platform: NodeJS.Platform;
+    attempts: number;
+    delayMs: number;
+    rename?: (from: string, to: string) => Promise<void>;
+  },
+): Promise<void> {
+  const move = opts.rename ?? rename;
+  if (opts.platform !== "win32") return move(from, to);
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await move(from, to);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code ?? "";
+      if (attempt >= opts.attempts || !BUSY.has(code)) {
+        await rm(from, { force: true });
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, opts.delayMs));
+    }
+  }
 }
 
 export function nodeAccountsIo(): AccountsIo {

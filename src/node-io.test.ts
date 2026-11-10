@@ -19,6 +19,7 @@ import {
   nodeAccountsIo,
   nodeLoginIo,
   nodeSessionsIo,
+  renameWithRetry,
 } from "./node-io.js";
 
 let base = "";
@@ -133,6 +134,61 @@ describe("loginHelperPath", () => {
     expect(loginHelperPath("file:///plugins/my%20dist/dist/server.js")).toBe(
       "/plugins/my dist/bin/open-login.sh",
     );
+  });
+});
+
+describe("renameWithRetry", () => {
+  const busy = (code: string) =>
+    Object.assign(new Error(`${code}: resource busy`), { code });
+
+  it("on Windows, tries again while the file is busy", async () => {
+    let calls = 0;
+    await renameWithRetry("a.tmp", "a", {
+      platform: "win32",
+      attempts: 5,
+      delayMs: 1,
+      rename: async () => {
+        calls += 1;
+        if (calls < 3) throw busy("EBUSY");
+      },
+    });
+    expect(calls).toBe(3);
+  });
+
+  it("on Windows, gives up after the last attempt and leaves no temp file", async () => {
+    base = await mkdtemp(join(tmpdir(), "claude-credentials-"));
+    const tmp = join(base, ".credentials.json.tmp-1");
+    await writeFile(tmp, "{}");
+    let calls = 0;
+    await expect(
+      renameWithRetry(tmp, join(base, ".credentials.json"), {
+        platform: "win32",
+        attempts: 5,
+        delayMs: 1,
+        rename: async () => {
+          calls += 1;
+          throw busy("EPERM");
+        },
+      }),
+    ).rejects.toThrow(/EPERM/);
+    expect(calls).toBe(5);
+    await expect(stat(tmp)).rejects.toThrow(/ENOENT/);
+  });
+
+  it("on macOS and Linux, tries once, as before", async () => {
+    let calls = 0;
+    await expect(
+      renameWithRetry("a.tmp", "a", {
+        platform: "linux",
+        attempts: 5,
+        delayMs: 1,
+        rename: async () => {
+          calls += 1;
+          throw busy("EBUSY");
+        },
+      }),
+    ).rejects.toThrow(/EBUSY/);
+    expect(calls).toBe(1);
   });
 });
 
