@@ -301,3 +301,66 @@ describe("the plan behind a login (SPEC 2026-10-30 §1)", () => {
     expect(info.fiveHour).toBeNull();
   });
 });
+
+describe("discoverAccounts on Windows", () => {
+  const WIN_HOME = "C:\\Users\\x";
+  const WIN_ACCOUNTS = `${WIN_HOME}\\.claude-accounts`;
+  function winIo(): AccountsIo {
+    const files: Record<string, string> = {
+      [`${WIN_HOME}/.claude.json`]: claudeJson("main@example.com", "uuid-main"),
+      [`${WIN_ACCOUNTS}\\team1\\.claude.json`]: claudeJson(
+        "team1@example.com",
+        "uuid-team1",
+      ),
+    };
+    return {
+      home: WIN_HOME,
+      platform: "win32",
+      async readFile(path) {
+        const content = files[path];
+        if (content === undefined) throw new Error(`ENOENT ${path}`);
+        return content;
+      },
+      async listDirs(path) {
+        return path === WIN_ACCOUNTS ? ["team1"] : [];
+      },
+    };
+  }
+
+  it("takes ~\\ with a trailing separator, and names each account dir the Windows way", async () => {
+    const accounts = await discoverAccounts(winIo(), {
+      accountsDir: "~\\.claude-accounts\\",
+      defaultAccountName: "main",
+    });
+    expect(accounts.map((a) => [a.name, a.configDir, a.email])).toEqual([
+      ["main", null, "main@example.com"],
+      ["team1", `${WIN_ACCOUNTS}\\team1`, "team1@example.com"],
+    ]);
+  });
+
+  it("takes a drive path written with forward slashes", async () => {
+    const io = winIo();
+    const seen: string[] = [];
+    const listDirs = io.listDirs;
+    io.listDirs = async (path) => {
+      seen.push(path);
+      return listDirs(path);
+    };
+    await discoverAccounts(io, {
+      accountsDir: "C:/Users/x/.claude-accounts",
+      defaultAccountName: "main",
+    });
+    expect(seen).toEqual(["C:/Users/x/.claude-accounts"]);
+  });
+
+  it("refuses a relative path", async () => {
+    await expect(
+      discoverAccounts(winIo(), {
+        accountsDir: "rel\\dir",
+        defaultAccountName: "main",
+      }),
+    ).rejects.toThrow(
+      'accountsDir "rel\\dir" must be an absolute path (or start with ~/)',
+    );
+  });
+});

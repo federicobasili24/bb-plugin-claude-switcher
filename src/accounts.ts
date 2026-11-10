@@ -6,9 +6,17 @@
 // file the CLI writes on first start and where it keeps `oauthAccount`.
 import { z } from "zod";
 import type { AccountUsage } from "./policy.js";
+import {
+  expandHome as expandHomeOn,
+  isAbsolutePath,
+  joinPath,
+  trimTrailingSeparators,
+} from "./platform.js";
 
 export interface AccountsIo {
   home: string;
+  /** The machine's platform; absent = macOS/Linux paths. */
+  platform?: NodeJS.Platform;
   readFile(path: string): Promise<string>;
   /** Names of the immediate subdirectories, or [] when the dir does not exist. */
   listDirs(path: string): Promise<string[]>;
@@ -123,15 +131,12 @@ const claudeJsonSchema = z.looseObject({
 
 type Login = Pick<Account, "email" | "accountUuid" | "kind" | "tier" | "planName">;
 
-export function expandHome(path: string, home: string): string {
-  return path === "~" || path.startsWith("~/") ? home + path.slice(1) : path;
-}
-
-/** Without trailing slashes: the keychain entry of an account is keyed by the exact config dir string. */
-function normalizeDir(path: string): string {
-  let dir = path;
-  while (dir.length > 1 && dir.endsWith("/")) dir = dir.slice(0, -1);
-  return dir;
+export function expandHome(
+  path: string,
+  home: string,
+  platform: NodeJS.Platform = "linux",
+): string {
+  return expandHomeOn(path, home, platform);
 }
 
 /** Login found in the given `.claude.json`; null when the file is missing (not a Claude Code dir). */
@@ -175,10 +180,14 @@ export async function discoverAccounts(
   io: AccountsIo,
   options: DiscoverOptions,
 ): Promise<Account[]> {
-  const accountsDir = normalizeDir(
-    expandHome(options.accountsDir.trim(), io.home),
+  const platform = io.platform ?? "linux";
+  // Without trailing separators: the keychain entry of an account is keyed
+  // by the exact config dir string.
+  const accountsDir = trimTrailingSeparators(
+    expandHomeOn(options.accountsDir.trim(), io.home, platform),
+    platform,
   );
-  if (!accountsDir.startsWith("/")) {
+  if (!isAbsolutePath(accountsDir, platform)) {
     throw new Error(
       `accountsDir "${options.accountsDir}" must be an absolute path (or start with ~/)`,
     );
@@ -192,8 +201,8 @@ export async function discoverAccounts(
     },
   ];
   for (const name of (await io.listDirs(accountsDir)).sort()) {
-    const dir = `${accountsDir}/${name}`;
-    const found = await login(io, `${dir}/.claude.json`);
+    const dir = joinPath(accountsDir, name, platform);
+    const found = await login(io, joinPath(dir, ".claude.json", platform));
     if (found === null) continue;
     if (name === options.defaultAccountName) {
       options.warn?.(

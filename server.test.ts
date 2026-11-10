@@ -328,6 +328,8 @@ interface QueuedRow {
 
 interface HostOptions {
   settings?: Record<string, string | number | boolean>;
+  /** A Windows machine with this home: the accounts IO reports win32. */
+  windowsHome?: string;
   /**
    * The projects bb lists, by id (default: proj-1, proj-2 and, on request,
    * personal). Every refresh moves a listed project off an account that
@@ -470,6 +472,10 @@ async function host(
     options.unwritable,
     options.storeGate,
   );
+  if (options.windowsHome !== undefined) {
+    accountsIo.home = options.windowsHome;
+    accountsIo.platform = "win32";
+  }
   const { loginIo, logins, made, links } = fakeLoginIo(
     options.accountEntries ??
       (() =>
@@ -6948,6 +6954,32 @@ describe("adding an account by logging in from bb", () => {
     );
     expect(h.made).toEqual([]);
     expect(h.logins).toEqual([]);
+  });
+
+  it("on Windows, makes the account directory with backslashes and shares from the default one", async () => {
+    const home = "C:\\Users\\someone";
+    const h = await host(ALL_FREE, {
+      windowsHome: home,
+      settings: { accountsDir: "~\\.claude-accounts\\" },
+      env: { PATH: "C:\\Windows" },
+    });
+    dispose = () => h.harness.dispose();
+    await h.harness.behavior.callRpc("account_login_start", { name: "team" });
+    expect(h.made).toEqual([`${home}\\.claude-accounts\\team`]);
+    expect(h.logins[0]?.env.CLAUDE_CONFIG_DIR).toBe(`${home}\\.claude-accounts\\team`);
+    expect(h.links[0]?.[0].startsWith(`${home}\\.claude`)).toBe(true);
+  });
+
+  it("on Windows, refuses an accounts directory inside the default account's, however it is spelled", async () => {
+    const home = "C:\\Users\\someone";
+    for (const accountsDir of [`${home}\\.claude`, "~\\.claude\\", "C:/Users/someone/.CLAUDE/sub"]) {
+      const h = await host(ALL_FREE, { windowsHome: home, settings: { accountsDir } });
+      await expect(h.harness.behavior.callRpc("account_login_start", { name: "projects" })).rejects.toThrow(
+        /inside the default account's directory/,
+      );
+      expect(h.made).toEqual([]);
+      h.harness.dispose();
+    }
   });
 
   it("refuses a new directory when the accounts directory is inside the default account's", async () => {

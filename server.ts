@@ -38,6 +38,7 @@ import {
   type EsperaTeam,
   type HeldRow,
 } from "./src/atascos.js";
+import { joinPath, plainPath, trimTrailingSeparators } from "./src/platform.js";
 import {
   discoverAccounts,
   expandHome,
@@ -2521,18 +2522,15 @@ export async function createPlugin(bb: BbPluginApi, deps: PluginDeps) {
       })();
     },
   });
-  /**
-   * An absolute path without `.`, `..` or repeated slashes, in lower case:
-   * for comparing where two paths lead, on a disk that may ignore case.
-   */
-  function plainPath(path: string): string {
-    const parts: string[] = [];
-    for (const part of path.toLowerCase().split("/")) {
-      if (part === "" || part === ".") continue;
-      if (part === "..") parts.pop();
-      else parts.push(part);
-    }
-    return `/${parts.join("/")}`;
+  /** The platform of the machine the plugin runs on (its paths). */
+  const pathPlatform = deps.accountsIo.platform ?? "linux";
+  /** The default account's directory, `~/.claude`. */
+  function defaultConfigDir(): string {
+    return joinPath(
+      trimTrailingSeparators(deps.accountsIo.home, pathPlatform),
+      ".claude",
+      pathPlatform,
+    );
   }
   /**
    * Where a login for `name` goes: the default account (no directory), a
@@ -2571,14 +2569,14 @@ export async function createPlugin(bb: BbPluginApi, deps: PluginDeps) {
       throw new Error(
         `an account named ${twin.name} already exists; use that name`,
       );
-    const dir = expandHome(
-      current.accountsDir.trim(),
-      deps.accountsIo.home,
-    ).replace(/\/+$/, "");
+    const dir = trimTrailingSeparators(
+      expandHome(current.accountsDir.trim(), deps.accountsIo.home, pathPlatform),
+      pathPlatform,
+    );
     // Under ~/.claude a new name can be `projects` or `plugins`: the login
     // would write into what every account shares, and list it as an account.
-    const own = plainPath(`${deps.accountsIo.home}/.claude`);
-    const plain = plainPath(dir);
+    const own = plainPath(defaultConfigDir(), pathPlatform);
+    const plain = plainPath(dir, pathPlatform);
     if (plain === own || plain.startsWith(`${own}/`))
       throw new Error(
         "the accounts directory is inside the default account's directory (~/.claude); set another one to add accounts from here",
@@ -2595,7 +2593,7 @@ export async function createPlugin(bb: BbPluginApi, deps: PluginDeps) {
     }
     return {
       name,
-      configDir: `${dir}/${name}`,
+      configDir: joinPath(dir, name, pathPlatform),
       email: null,
       accountUuid: null,
     };
@@ -3122,7 +3120,7 @@ export async function createPlugin(bb: BbPluginApi, deps: PluginDeps) {
     if (io === undefined) return;
     const name = projectNames.get(projectId) ?? projectId;
     const dirOf = (a: Account | null | undefined) =>
-      a?.configDir ?? `${deps.accountsIo.home}/.claude`;
+      a?.configDir ?? defaultConfigDir();
     try {
       const target = dirOf(account);
       const left = accounts.find(
@@ -3487,7 +3485,7 @@ export async function createPlugin(bb: BbPluginApi, deps: PluginDeps) {
     },
     async account_login_start({ name }) {
       const target = await loginTarget(name);
-      const shareFrom = `${deps.accountsIo.home.replace(/\/+$/, "")}/.claude`;
+      const shareFrom = defaultConfigDir();
       await login.start(
         { ...target, shareFrom },
         {

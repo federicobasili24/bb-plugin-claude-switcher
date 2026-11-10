@@ -74,6 +74,7 @@ export function nodeCredentialIo(): CredentialIo {
 export function nodeAccountsIo(): AccountsIo {
   return {
     home: homedir(),
+    platform: platform(),
     readFile: (path) => readFile(path, "utf8"),
     async listDirs(path) {
       try {
