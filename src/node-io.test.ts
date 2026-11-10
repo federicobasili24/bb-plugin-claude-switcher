@@ -125,14 +125,26 @@ describe("nodeLoginIo", () => {
 
 describe("loginHelperPath", () => {
   it("finds bin/open-login.sh beside server.ts, and one level up from dist/", () => {
-    expect(loginHelperPath("file:///plugins/switcher/server.ts")).toBe(
+    expect(loginHelperPath("file:///plugins/switcher/server.ts", "darwin")).toBe(
       "/plugins/switcher/bin/open-login.sh",
     );
-    expect(loginHelperPath("file:///plugins/switcher/dist/server.js")).toBe(
-      "/plugins/switcher/bin/open-login.sh",
+    expect(
+      loginHelperPath("file:///plugins/switcher/dist/server.js", "darwin"),
+    ).toBe("/plugins/switcher/bin/open-login.sh");
+    expect(
+      loginHelperPath("file:///plugins/my%20dist/dist/server.js", "linux"),
+    ).toBe("/plugins/my dist/bin/open-login.sh");
+  });
+
+  it("finds bin\\open-login.cmd on Windows, also one level up from dist\\", () => {
+    expect(loginHelperPath("file:///C:/plugins/switcher/server.ts", "win32")).toBe(
+      "C:\\plugins\\switcher\\bin\\open-login.cmd",
     );
-    expect(loginHelperPath("file:///plugins/my%20dist/dist/server.js")).toBe(
-      "/plugins/my dist/bin/open-login.sh",
+    expect(
+      loginHelperPath("file:///C:/plugins/switcher/dist/server.js", "win32"),
+    ).toBe("C:\\plugins\\switcher\\bin\\open-login.cmd");
+    expect(loginHelperPath("file:///C:/p/my%20dist/dist/server.js", "win32")).toBe(
+      "C:\\p\\my dist\\bin\\open-login.cmd",
     );
   });
 });

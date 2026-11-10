@@ -561,7 +561,7 @@ export interface PluginDeps {
    * (see src/sessions.ts); none: they are not.
    */
   sessionsIo?: SessionsIo;
-  /** Path of bin/open-login.sh, the BROWSER a login runs. */
+  /** Path of bin/open-login.sh (open-login.cmd on Windows), the BROWSER a login runs. */
   loginHelper: string;
   /** The plugin process's environment, inherited by a login. */
   env: Record<string, string | undefined>;
@@ -745,7 +745,7 @@ export async function createPlugin(bb: BbPluginApi, deps: PluginDeps) {
     loginPrivateWindow: {
       type: "boolean",
       label:
-        "Open logins in a private Chrome window on macOS (so they do not reuse the browser's Claude session)",
+        "Open logins in a private Chrome window on macOS and Windows (so they do not reuse the browser's Claude session)",
       default: true,
     },
   });

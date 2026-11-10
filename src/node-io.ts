@@ -292,11 +292,20 @@ export function nodeSessionsIo(
 }
 
 /**
- * bin/open-login.sh next to the plugin's files: the source tree keeps it
- * beside server.ts, the built plugin runs from dist/ one level down.
+ * bin/open-login.sh (bin\open-login.cmd on Windows) next to the plugin's
+ * files: the source tree keeps it beside server.ts, the built plugin runs
+ * from dist/ one level down.
  */
-export function loginHelperPath(moduleUrl: string): string {
-  const dir = fileURLToPath(new URL(".", moduleUrl));
-  const root = dir.endsWith("/dist/") ? dir.slice(0, -"dist/".length) : dir;
-  return `${root}bin/open-login.sh`;
+export function loginHelperPath(
+  moduleUrl: string,
+  platform: NodeJS.Platform = process.platform,
+): string {
+  const windows = platform === "win32";
+  const dir = fileURLToPath(new URL(".", moduleUrl), { windows });
+  const sep = windows ? "\\" : "/";
+  const dist = `${sep}dist${sep}`;
+  const root = dir.endsWith(dist) ? dir.slice(0, -"dist/".length) : dir;
+  return windows
+    ? `${root}bin\\open-login.cmd`
+    : `${root}bin/open-login.sh`;
 }

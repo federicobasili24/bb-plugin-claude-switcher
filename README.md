@@ -164,7 +164,7 @@ goes to a Max account that keeps Fable this way.
 
 **Add account** in Settings creates the account's directory, shares your
 transcripts and configuration with it and runs Claude Code's own login in
-a private Chrome window (macOS; the default browser elsewhere). No
+a private Chrome window (macOS and Windows; the default browser elsewhere). No
 terminal.
 
 </td>
@@ -740,7 +740,7 @@ is lost anyway: Calor sees the new account and stops ticking.
 - A login started from Settings runs `claude auth login` (the executable
   the `claudeCommand` setting names, without a shell) with
   `CLAUDE_CONFIG_DIR` set to the account's directory and `BROWSER` set to
-  the plugin's `bin/open-login.sh`, a small script that accepts only an
+  the plugin's `bin/open-login.sh` (`bin\open-login.cmd` on Windows), a small script that accepts only an
   `https://` address and opens it in a private Chrome window or the
   default browser. The consent address goes from the CLI to that script
   and is never logged or stored. The second address the CLI prints, for when no window
@@ -822,7 +822,7 @@ named `default`; the default account's own name always works.
 | `seatsFollowLoad`    | `true`               | A Max or Ultra account takes one thread more than `seatsMax` while its day's pace is under 50 % and its 5-hour session (when it has one) under 40 %, and one fewer once its pace passes 90 %; each change is in the history. Off: `seatsMax`, always. See [Seats per account](#seats-per-account). |
 | `dayStartHour`       | `9`                  | Hour the day starts in Europe/Madrid. Each day gets an even share of what is left of an account's weekly window; the panel and `health` show how much of it is spent. |
 | `paceHoldsBackground` | `false`             | On: an Ultra or Max account at 90 % of its share of the day takes no more background work (a thread another thread, an automation or a plugin opens) unless no other account can run it, and the panel shows it as kept for you. Your own threads are never held back by it. Off (the default since 0.2.33): the day's share is only shown. |
-| `loginPrivateWindow` | `true`               | macOS: open logins in a private Chrome window, so they do not reuse the browser's Claude session. Off, without Chrome, or on Linux: the default browser.                                                            |
+| `loginPrivateWindow` | `true`               | macOS and Windows: open logins in a private Chrome window, so they do not reuse the browser's Claude session. Off, without Chrome, or on Linux: the default browser. On Windows, `CLAUDE_SWITCHER_CHROME` in bb's environment names a Chrome outside the usual folders.                                                            |
 
 The accounts are read again whenever you pick one (`use`, the picker) and
 when a thread is created, so a new account directory or a changed
